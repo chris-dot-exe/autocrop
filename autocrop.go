@@ -4,10 +4,18 @@ import (
 	"github.com/mandykoh/prism/srgb"
 	"image"
 	"image/draw"
+	"log"
 	"math"
 )
 
 const bufferPixels = 2
+
+type Margin struct {
+	Top    int
+	Right  int
+	Left   int
+	Bottom int
+}
 
 // BoundsForThreshold returns the bounds for a crop of the specified image up to
 // the given energy threshold.
@@ -16,6 +24,18 @@ const bufferPixels = 2
 // energy to allow to be cropped away before stopping, relative to the maximum
 // energy of the image.
 func BoundsForThreshold(img *image.NRGBA, energyThreshold float32) image.Rectangle {
+	return boundsForThreshold(img, energyThreshold, nil)
+}
+
+func BoundsForThresholdWithMargin(img *image.NRGBA, energyThreshold float32, margins ...int) image.Rectangle {
+
+	margin := getMargin(margins)
+	log.Printf("%+v\n", margin)
+
+	return boundsForThreshold(img, energyThreshold, margin)
+}
+
+func boundsForThreshold(img *image.NRGBA, energyThreshold float32, margin *Margin) image.Rectangle {
 
 	crop := img.Bounds()
 
@@ -46,7 +66,15 @@ func BoundsForThreshold(img *image.NRGBA, energyThreshold float32) image.Rectang
 	crop.Min.Y += cropTop
 	crop.Max.X -= cropRight
 	crop.Max.Y -= cropBottom
+	log.Printf("crop: %+v\n", crop)
+	if margin != nil {
+		crop.Min.X -= margin.Left
+		crop.Min.Y -= margin.Top
+		crop.Max.X += margin.Right
+		crop.Max.Y += margin.Bottom
+	}
 
+	log.Printf("crop: %+v\n", crop)
 	return crop
 }
 
@@ -86,7 +114,15 @@ func Energies(img *image.NRGBA, r image.Rectangle) (cols, rows []float32) {
 // energy to allow to be cropped away before stopping, relative to the maximum
 // energy of the image.
 func ToThreshold(img *image.NRGBA, energyThreshold float32) *image.NRGBA {
-	crop := BoundsForThreshold(img, energyThreshold)
+	return toThreshold(img, energyThreshold)
+}
+
+func ToThresholdWithMargin(img *image.NRGBA, energyThreshold float32, margins ...int) *image.NRGBA {
+	return toThreshold(img, energyThreshold, margins...)
+}
+
+func toThreshold(img *image.NRGBA, energyThreshold float32, margins ...int) *image.NRGBA {
+	crop := BoundsForThresholdWithMargin(img, energyThreshold, margins...)
 	resultImg := image.NewNRGBA(image.Rect(0, 0, crop.Dx(), crop.Dy()))
 	draw.Draw(resultImg, resultImg.Bounds(), img, crop.Min, draw.Src)
 	return resultImg
@@ -171,4 +207,42 @@ func luminancesAndAlphas(img *image.NRGBA, r image.Rectangle) (luminances, alpha
 	}
 
 	return luminances, alphas
+}
+
+func getMargin(margins []int) *Margin {
+	var m *Margin
+
+	switch len(margins) {
+	case 0:
+		m = nil
+	case 1:
+		m = &Margin{
+			Top:    margins[0],
+			Right:  margins[0],
+			Left:   margins[0],
+			Bottom: margins[0],
+		}
+	case 2:
+		m = &Margin{
+			Top:    margins[0],
+			Right:  margins[1],
+			Left:   margins[1],
+			Bottom: margins[0],
+		}
+	case 3:
+		m = &Margin{
+			Top:    margins[0],
+			Right:  margins[1],
+			Left:   margins[1],
+			Bottom: margins[2],
+		}
+	case 4:
+		m = &Margin{
+			Top:    margins[0],
+			Right:  margins[1],
+			Left:   margins[2],
+			Bottom: margins[3],
+		}
+	}
+	return m
 }
