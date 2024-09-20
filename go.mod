@@ -1,4 +1,4 @@
-module github.com/mandykoh/autocrop
+module github.com/chris-dot-exe/autocrop
 
 go 1.14
 

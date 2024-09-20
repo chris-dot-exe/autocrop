@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/mandykoh/autocrop"
+	"github.com/chris-dot-exe/autocrop"
 	"image"
 	"image/draw"
 	_ "image/jpeg"

@@ -2,7 +2,6 @@
 
 [![GoDoc](https://godoc.org/github.com/mandykoh/autocrop?status.svg)](https://godoc.org/github.com/mandykoh/autocrop)
 [![Go Report Card](https://goreportcard.com/badge/github.com/mandykoh/autocrop)](https://goreportcard.com/report/github.com/mandykoh/autocrop)
-[![Build Status](https://travis-ci.org/mandykoh/autocrop.svg?branch=main)](https://travis-ci.org/mandykoh/autocrop)
 
 `autocrop` is an automatic image cropping/region-of-interest finding implementation in Go.
 
@@ -46,12 +45,28 @@ The [`ToThreshold`](https://godoc.org/github.com/mandykoh/autocrop#ToThreshold) 
 croppedImg := autocrop.ToThreshold(img, energyThreshold)
 ```
 
+## New
+Option to add margin to the cropped image.
+Margin follows the same rules as CSS's margin. 
+
+* When one value is specified, it applies the same margin to all four sides.
+* When two values are specified, the first margin applies to the top and bottom, the second to the left and right.
+* When three values are specified, the first margin applies to the top, the second to the right and left, the third to the bottom.
+* When four values are specified, the margins apply to the top, right, bottom, and left in that order (clockwise).
+* 
+```go
+croppedImg := autocrop.ToThresholdWithMargin(img, energyThreshold, 10)
+croppedImg =  autocrop.ToThresholdWithMargin(img, energyThreshold, 10, 5)
+croppedImg =  autocrop.ToThresholdWithMargin(img, energyThreshold, 10, 5, 4)
+croppedImg =  autocrop.ToThresholdWithMargin(img, energyThreshold, 10, 5, 4, 2)
+```
+
 ## Command line tool
 
 `autocrop` also provides a command line tool that can be installed as follows:
 
 ```
-$ go install github.com/mandykoh/autocrop/cmd/autocrop
+$ go install github.com/chris-dot-exe/autocrop/cmd/autocrop
 ```
 
 and used to crop images like this:

@@ -240,8 +240,8 @@ func getMargin(margins []int) *Margin {
 		m = &Margin{
 			Top:    margins[0],
 			Right:  margins[1],
-			Left:   margins[2],
-			Bottom: margins[3],
+			Bottom: margins[2],
+			Left:   margins[3],
 		}
 	}
 	return m
