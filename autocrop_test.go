@@ -182,7 +182,7 @@ func TestBoundsForThresholdMargin(t *testing.T) {
 	t.Run("returns bounds for simple image with plain background cropped out", func(t *testing.T) {
 		img := loadTestImage("70x70-pink-square-on-white.png", t)
 
-		result := BoundsForThresholdWithMargin(img, 0.01, 20)
+		result, _ := BoundsForThresholdWithMargin(img, 0.01, true, 20)
 
 		if expected, actual := 110, result.Dx(); expected != actual {
 			t.Errorf("Expected cropped bounds to be %d pixels wide but was %d", expected, actual)
@@ -298,9 +298,9 @@ func TestToThresholdMargin(t *testing.T) {
 	t.Run("returns complex image with transparent background cropped out", func(t *testing.T) {
 		img := loadTestImage("70x70-pink-square-on-gradient.png", t)
 
-		result := ToThresholdWithMargin(img, 0.31, 10)
+		result := ToThresholdWithMargin(img, 0.31, true, 100)
 
-		expectedResult := image.NewNRGBA(image.Rect(0, 0, 90, 90))
+		expectedResult := image.NewNRGBA(image.Rect(0, 0, 270, 270))
 		draw.Draw(expectedResult, expectedResult.Bounds(), img, image.Pt(img.Bounds().Min.X+48, img.Bounds().Min.Y+71), draw.Src)
 
 		if expected, actual := expectedResult.Bounds().Dx(), result.Bounds().Dx(); expected != actual {

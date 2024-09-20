@@ -1,6 +1,7 @@
 package autocrop
 
 import (
+	"github.com/mandykoh/prism/linear"
 	"github.com/mandykoh/prism/srgb"
 	"image"
 	"image/draw"
@@ -24,18 +25,19 @@ type Margin struct {
 // energy to allow to be cropped away before stopping, relative to the maximum
 // energy of the image.
 func BoundsForThreshold(img *image.NRGBA, energyThreshold float32) image.Rectangle {
-	return boundsForThreshold(img, energyThreshold, nil)
+	rect, _ := boundsForThreshold(img, energyThreshold, false, nil)
+	return rect
 }
 
-func BoundsForThresholdWithMargin(img *image.NRGBA, energyThreshold float32, margins ...int) image.Rectangle {
+func BoundsForThresholdWithMargin(img *image.NRGBA, energyThreshold float32, extend bool, margins ...int) (image.Rectangle, srgb.Color) {
 
 	margin := getMargin(margins)
 	log.Printf("%+v\n", margin)
 
-	return boundsForThreshold(img, energyThreshold, margin)
+	return boundsForThreshold(img, energyThreshold, extend, margin)
 }
 
-func boundsForThreshold(img *image.NRGBA, energyThreshold float32, margin *Margin) image.Rectangle {
+func boundsForThreshold(img *image.NRGBA, energyThreshold float32, extend bool, margin *Margin) (image.Rectangle, srgb.Color) {
 
 	crop := img.Bounds()
 
@@ -46,10 +48,16 @@ func boundsForThreshold(img *image.NRGBA, energyThreshold float32, margin *Margi
 	energyCrop.Max.Y--
 
 	if energyCrop.Empty() {
-		return img.Bounds()
+		return img.Bounds(), srgb.Color{
+			RGB: linear.RGB{
+				R: 255,
+				G: 255,
+				B: 255,
+			},
+		}
 	}
 
-	colEnergies, rowEnergies := Energies(img, energyCrop)
+	colEnergies, rowEnergies, dominantColor := Energies(img, energyCrop)
 
 	// Find left and right high energy jumps
 	maxEnergy := findMaxEnergy(colEnergies)
@@ -66,21 +74,43 @@ func boundsForThreshold(img *image.NRGBA, energyThreshold float32, margin *Margi
 	crop.Min.Y += cropTop
 	crop.Max.X -= cropRight
 	crop.Max.Y -= cropBottom
-	log.Printf("crop: %+v\n", crop)
 	if margin != nil {
-		crop.Min.X -= margin.Left
-		crop.Min.Y -= margin.Top
-		crop.Max.X += margin.Right
-		crop.Max.Y += margin.Bottom
+
+		if !extend {
+			if (crop.Min.X - margin.Left) >= 0 {
+				crop.Min.X -= margin.Left
+			} else {
+				crop.Min.X = 0
+			}
+			if (crop.Min.Y - margin.Top) >= 0 {
+				crop.Min.Y -= margin.Top
+			} else {
+				crop.Min.Y = 0
+			}
+			if (crop.Max.X + margin.Right) <= img.Bounds().Max.X {
+				crop.Max.X += margin.Right
+			} else {
+				crop.Max.X = img.Bounds().Max.X
+			}
+			if (crop.Max.Y + margin.Bottom) <= img.Bounds().Max.Y {
+				crop.Max.Y += margin.Bottom
+			} else {
+				crop.Max.Y = img.Bounds().Max.Y
+			}
+		} else {
+			crop.Min.X -= margin.Left
+			crop.Min.Y -= margin.Top
+			crop.Max.X += margin.Right
+			crop.Max.Y += margin.Bottom
+		}
 	}
 
-	log.Printf("crop: %+v\n", crop)
-	return crop
+	return crop, dominantColor
 }
 
 // Energies returns the total row and column energies for the specified region
 // of an image.
-func Energies(img *image.NRGBA, r image.Rectangle) (cols, rows []float32) {
+func Energies(img *image.NRGBA, r image.Rectangle) (cols, rows []float32, color2 srgb.Color) {
 
 	// Need 1 pixel more luminance data on each side so that all energy
 	// calculations are for pixels with a full set of neighbours.
@@ -90,11 +120,10 @@ func Energies(img *image.NRGBA, r image.Rectangle) (cols, rows []float32) {
 	luminanceBounds.Max.X++
 	luminanceBounds.Max.Y++
 
-	luminances, alphas := luminancesAndAlphas(img, luminanceBounds)
+	luminances, alphas, dominantColor := luminancesAndAlphas(img, luminanceBounds)
 
 	cols = make([]float32, r.Dx(), r.Dx())
 	rows = make([]float32, r.Dy(), r.Dy())
-
 	// Calculate total column and row energies
 	for i, row := r.Min.Y, 0; i < r.Max.Y; i, row = i+1, row+1 {
 		for j, col := r.Min.X, 0; j < r.Max.X; j, col = j+1, col+1 {
@@ -104,7 +133,7 @@ func Energies(img *image.NRGBA, r image.Rectangle) (cols, rows []float32) {
 		}
 	}
 
-	return cols, rows
+	return cols, rows, dominantColor
 }
 
 // ToThreshold returns an image cropped using the bounds provided by
@@ -114,16 +143,17 @@ func Energies(img *image.NRGBA, r image.Rectangle) (cols, rows []float32) {
 // energy to allow to be cropped away before stopping, relative to the maximum
 // energy of the image.
 func ToThreshold(img *image.NRGBA, energyThreshold float32) *image.NRGBA {
-	return toThreshold(img, energyThreshold)
+	return toThreshold(img, energyThreshold, false)
 }
 
-func ToThresholdWithMargin(img *image.NRGBA, energyThreshold float32, margins ...int) *image.NRGBA {
-	return toThreshold(img, energyThreshold, margins...)
+func ToThresholdWithMargin(img *image.NRGBA, energyThreshold float32, extend bool, margins ...int) *image.NRGBA {
+	return toThreshold(img, energyThreshold, extend, margins...)
 }
 
-func toThreshold(img *image.NRGBA, energyThreshold float32, margins ...int) *image.NRGBA {
-	crop := BoundsForThresholdWithMargin(img, energyThreshold, margins...)
+func toThreshold(img *image.NRGBA, energyThreshold float32, extend bool, margins ...int) *image.NRGBA {
+	crop, dominantColor := BoundsForThresholdWithMargin(img, energyThreshold, extend, margins...)
 	resultImg := image.NewNRGBA(image.Rect(0, 0, crop.Dx(), crop.Dy()))
+	draw.Draw(resultImg, resultImg.Bounds(), &image.Uniform{C: dominantColor.ToRGBA(1.0)}, image.Point{}, draw.Src)
 	draw.Draw(resultImg, resultImg.Bounds(), img, crop.Min, draw.Src)
 	return resultImg
 }
@@ -189,24 +219,37 @@ func luminance(c srgb.Color, alpha float32) float32 {
 	return c.Luminance() + alpha
 }
 
-func luminancesAndAlphas(img *image.NRGBA, r image.Rectangle) (luminances, alphas []float32) {
+func luminancesAndAlphas(img *image.NRGBA, r image.Rectangle) (luminances, alphas []float32, color2 srgb.Color) {
 
 	luminances = make([]float32, r.Dx()*r.Dy(), r.Dx()*r.Dy())
 	alphas = make([]float32, r.Dx()*r.Dy(), r.Dx()*r.Dy())
 
 	index := 0
 
+	colorCount := make(map[srgb.Color]int)
+
 	// Get the luminances and alphas for all pixels
 	for i := r.Min.Y; i < r.Max.Y; i++ {
 		for j := r.Min.X; j < r.Max.X; j++ {
 			c, a := colourAt(img, j, i)
+			colorCount[c]++
 			luminances[index] = luminance(c, a)
 			alphas[index] = a
 			index++
 		}
 	}
 
-	return luminances, alphas
+	// Find the most frequent color
+	var dominantColor srgb.Color
+	maxCount := 0
+	for c, count := range colorCount {
+		if count > maxCount {
+			dominantColor = c
+			maxCount = count
+		}
+	}
+
+	return luminances, alphas, dominantColor
 }
 
 func getMargin(margins []int) *Margin {
